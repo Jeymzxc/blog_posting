@@ -1,5 +1,6 @@
 import express from 'express';
 import bodyParser from 'body-parser';
+import mysql from 'mysql2';
 
 const app = express();
 const port = 3000;
@@ -7,98 +8,82 @@ const port = 3000;
 app.use(bodyParser.json());
 app.use(express.urlencoded({ extended: true }));
 
-let blogs = [
-    {
-        id: 1,
-        Title: "My First Blog Post",
-        Content: "This is the content of the blog.",
-        Author: "John Doe"
-    },
-    {
-        id: 2,
-        Title: "A Day in the Life",
-        Content: "Today I want to share my daily routine.",
-        Author: "Jane Smith"
-    },
-    {
-        id: 3,
-        Title: "Travel Tips",
-        Content: "Here are some tips for traveling on a budget.",
-        Author: "Emily Johnson"
-    },
-    {
-        id: 4,
-        Title: "Healthy Eating",
-        Content: "How to maintain a balanced diet.",
-        Author: "Michael Brown"
-    },
-    {
-        id: 5,
-        Title: "Tech Trends 2025",
-        Content: "Latest trends in technology for the upcoming year.",
-        Author: "Lisa Davis"
-    }
-];
+// Database connection
+const db = mysql.createConnection({
+    host: 'localhost',
+    user: 'root',
+    password: '',
+    database: 'pBlog_db'
+});
+
+db.connect(err => {
+    if (err) throw err;
+    console.log('Connected to MySQL!');
+});
 
 // Retrieve all blog posts
 app.get('/posts', (req, res) => {
-    res.status(200).json({ message: "Success", blogs });
+    db.query('SELECT * FROM posts', (err, results) => {
+        if (err) return res.status(500).json({ message: "Database error", error: err.message });
+        res.status(200).json({ message: "Success", blogs: results });
+    });
 });
 
 // Retrieve a specific blog post
 app.get('/posts/:id', (req, res) => {
     const id = parseInt(req.params.id);
-    const index = blogs.findIndex((blog) => blog.id === id);
-
-    if (index === -1) {
-        return res.status(404).json({ message: "Blog not found" });
-    }
-
-    res.json(blogs[index]);
+    db.query('SELECT * FROM posts WHERE id = ?', [id], (err, results) => {
+        if (err) return res.status(500).json({ message: "Database error", error: err.message });
+        if (results.length === 0) return res.status(404).json({ message: "Blog not found" });
+        res.json(results[0]);
+    });
 });
 
 // Create a new blog post
 app.post('/posts', (req, res) => {
-    const { Title, Author, Content } = req.body;
-
-    const newBlog = {
-        id: blogs.length + 1,
-        Title,
-        Content,
-        Author
-    };
-
-    blogs.push(newBlog);
-    res.status(200).json({ message: "Blog added successfully" });
+    const { title, content, author } = req.body;  
+    db.query(
+        'INSERT INTO posts (title, content, author) VALUES (?, ?, ?)',  
+        [title, content, author],
+        (err, result) => {
+            if (err) return res.status(500).json({ message: "Database error", error: err.message });
+            res.status(200).json({ message: "Blog added successfully", id: result.insertId });
+        }
+    );
 });
 
 // Update an existing blog post
-app.patch("/posts/:id", (req, res) => {
+app.patch('/posts/:id', (req, res) => {
     const id = parseInt(req.params.id);
-    const index = blogs.findIndex((blog) => blog.id === id);
 
-    const updatedBlog = {
-        id: blogs[index].id,
-        Title: req.body.Title || blogs[index].Title,
-        Content: req.body.Content || blogs[index].Content,
-        Author: req.body.Author || blogs[index].Author
-    };
+    db.query('SELECT * FROM posts WHERE id = ?', [id], (err, results) => {
+        if (err) return res.status(500).json({ message: "Database error", error: err.message });
+        if (results.length === 0) return res.status(404).json({ message: "Blog not found" });
 
-    blogs[index] = updatedBlog;
-    res.status(200).json({ message: "Blog updated successfully", blog: updatedBlog });
+        const existing = results[0];
+        const updatedTitle = req.body.title || existing.title;
+        const updatedContent = req.body.content || existing.content;   
+        const updatedAuthor = req.body.author || existing.author;
+
+        db.query(
+            'UPDATE posts SET title = ?, content = ?, author = ? WHERE id = ?',  
+            [updatedTitle, updatedContent, updatedAuthor, id],
+            (err2) => {
+                if (err2) return res.status(500).json({ message: "Database error", error: err2.message });
+                res.status(200).json({ message: "Blog updated successfully" });
+            }
+        );
+    });
 });
 
 // Delete a blog post
 app.delete('/posts/:id', (req, res) => {
     const id = parseInt(req.params.id);
-    const index = blogs.findIndex((blog) => blog.id === id);
-
-    if (index === -1) {
-        return res.status(404).json({ message: "Blog not found" });
-    }
-
-    blogs.splice(index, 1);
-    res.status(200).json({ message: "Blog deleted successfully" });
+    db.query('DELETE FROM posts WHERE id = ?', [id], (err, result) => {
+        if (err) return res.status(500).json({ message: "Database error", error: err.message });
+        if (result.affectedRows === 0) return res.status(404).json({ message: "Blog not found" });
+        res.status(200).json({ message: "Blog deleted successfully" });
+    });
 });
 
 // Login Credentials
