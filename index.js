@@ -30,7 +30,7 @@ const db = mysql.createConnection({
     host: 'localhost',
     user: 'root',
     password: '',
-    database: 'pBlog_db'
+    database: 'pblog_db'
 });
 
 db.connect(err => {
